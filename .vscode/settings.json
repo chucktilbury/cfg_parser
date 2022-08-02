@@ -9,6 +9,7 @@
         "OSQU",
         "OSUBS",
         "QSTR",
-        "qstrg"
+        "qstrg",
+        "XNUM"
     ]
 }

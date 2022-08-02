@@ -31,6 +31,16 @@ typedef enum {
     TOK_NUM,
 } TokenType;
 
+typedef enum {
+    CT_INVALID  = 0x00, // default type
+    CT_WS       = 0x01, // white space
+    CT_CR       = 0x02, // a '\n' character
+    CT_ALPHA    = 0x04, // 'a' ... 'z' and 'A' ... 'Z'
+    CT_NUM      = 0x08, // '0' ... '9'
+    CT_XNUM     = 0x10, // '0' ... '9', 'a' ... 'f', and 'A' ... 'F'
+    CT_PUNCT    = 0x20, // []=\'":
+} CharType;
+
 typedef struct {
     String* str;
     TokenType type;
@@ -42,14 +52,32 @@ typedef struct {
     int len;
 } String;
 
+typedef struct {
+    String** list;
+    int cap;
+    int len;
+} StringList;
+
+typedef struct {
+    double* list;
+    int cap;
+    int len;
+} NumberList;
+
+typedef struct {
+    bool* list;
+    int cap;
+    int len;
+} BoolList;
+
 typedef struct _value_entry {
     String* name;
     ConfigType type;
     String* val_str;
     union {
-        const char* str;
-        double num;
-        bool bval;
+        StringList* str;
+        NumberList* num;
+        BoolList* bval;
     } data;
     struct _value_entry* left;
     struct _value_entry* right;
@@ -286,10 +314,30 @@ static char read_char(FileBuf* fb)
         int ch = fb->buf[fb->tail];
         fb->tail++;
         fb->head = fb->tail;
+        if(ch == '\n')
+            line_no++;
         return ch;
     }
     else
         return (char)EOF;
+}
+
+static char read_char_no_ws(FileBuf* fb)
+{
+
+    int finished = 0;
+
+    while(!finished) {
+        int ch = read_char(fb);
+        if(ch == EOF)
+            return EOF;
+        else if(ch == '\n')
+            line_no++;
+        else if(!isspace(ch)) {
+            return ch;
+        }
+        // else loop
+    }
 }
 
 static void unread_char(FileBuf* fb)
@@ -303,9 +351,40 @@ static void unread_char(FileBuf* fb)
         fb->head = fb->tail = 0;
 }
 
-static void parse_file(FileBuf* fb)
+static void parse_value(FileBuf* fb)
 {
 
+}
+
+static void parse_section(FileBuf* fb)
+{
+    read_char(fb);  // consume the '['
+    String* str = create_str(NULL);
+    int finished = 0;
+    while(!finished) {
+        int ch = read_char(fb);
+        if(ch != ']')
+            add_str_char(str, ch);
+        else
+            finished++;
+    }
+}
+
+static void parse_file(FileBuf* fb)
+{
+    int finished = 0;
+    int ch = peek_char(fb);
+
+    while(!finished) {
+        if(ch == EOF)
+            finished++;
+        else if(ch == '#' || ch == ';')
+            consume_comment(fb);
+        else if(ch == '[')
+            parse_section(fb);
+        else
+            parse_value(fb);
+    }
 }
 
 void loadConfig(const char* fname)
