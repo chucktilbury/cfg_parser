@@ -60,6 +60,7 @@ Value* findVal(const char* name);
 
 void resetValIndex(Value* val);
 ValEntry* iterateVal(Value* val);
+ValEntry* getValEntry(Value* val, int idx);
 
 #define VAL_ENTRY_AS_STR(ve)    ((ve)->data.str)
 #define VAL_ENTRY_AS_FNUM(ve)   ((ve)->data.fnum)

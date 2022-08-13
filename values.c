@@ -1,12 +1,81 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#include <stdarg.h>
 #include <assert.h>
 
+#include "scanner.h"
 #include "memory.h"
 #include "values.h"
 
 static Value* cfg_store = NULL;
+
+typedef struct {
+    char* buf;
+    int cap;
+    int len;
+} str_t;
+
+static void add_str_str(str_t* s, const char* str)
+{
+    if(str != NULL) {
+        int len = strlen(str);
+        if(s->len+len+1 > s->cap) {
+            while(s->len+len+1 > s->cap)
+                s->cap <<= 1;
+            s->buf = _realloc_ds_array(s->buf, char, s->cap);
+        }
+        strcpy(&s->buf[s->len], str);
+        s->len += len;
+    }
+}
+
+static void add_str_char(str_t* s, int ch)
+{
+    if(s->len+2 > s->cap) {
+        s->cap <<= 1;
+        s->buf = _realloc_ds_array(s->buf, char, s->cap);
+    }
+    s->buf[s->len] = (char)ch;
+    s->len++;
+    s->buf[s->len] = '\0';
+}
+
+static void reset_str(str_t* s)
+{
+    s->len = 0;
+    s->buf[0] = '\0';
+}
+
+static void add_str_fmt(str_t* s, const char* fmt, ...)
+{
+    va_list args;
+
+    va_start(args, fmt);
+    int len = vsnprintf(NULL, 0, fmt, args);
+    va_end(args);
+
+    char* buf = _alloc(len+1);
+    va_start(args, fmt);
+    vsnprintf(buf, len+1, fmt, args);
+    va_end(args);
+
+    add_str_str(s, buf);
+    _free(buf);
+}
+
+static str_t* create_str(const char* str)
+{
+    str_t* s = _alloc_ds(str_t);
+    s->len = 0;
+    s->cap = 1;
+    s->buf = _alloc(s->cap);
+    s->buf[0] = '\0';
+
+    add_str_str(s, str);
+    return s;
+}
 
 static void add_value(Value* tree, Value* node)
 {
@@ -70,6 +139,124 @@ static void prepend_val_entry(Value* val, ValEntry* ve)
     // TODO: fix me
     val->list.list[val->list.len] = ve;
     val->list.len++;
+}
+
+/*
+ * Implement a (relatively) simple state machine to subs vars into strings.
+ *
+ * A var is a pre-defined var that is surrounded by $(...). If the var is not
+ * found, or an error occurs, then the var is left in the string unchanged.
+ */
+static const char* do_str_subs(const char* str)
+{
+    int idx = 0;
+    int var_idx = 0;
+    int state = 0;
+    int finished = 0;
+    str_t* s = create_str(NULL);
+    str_t* tmp = create_str(NULL);
+
+    while(!finished) {
+        switch(state) {
+            // initial state, copying characters
+            case 0:
+                switch(str[idx]) {
+                    case '$': state = 1; idx++; break;
+                    case '\0': finished++; break;
+                    default: add_str_char(s, str[idx++]); break;
+                }
+                break;
+            // seen a '$', check if it's a var opener
+            case 1:
+                if(str[idx] == '(') {
+                    state = 2;
+                    idx++;
+                }
+                else if(str[idx] == '\0') {
+                    finished++;
+                }
+                else {
+                    // nope. a '$' by itself is legal.
+                    add_str_char(s, '$');
+                    add_str_char(s, str[idx++]);
+                    state = 1;
+                }
+                break;
+            // seen a var opener, get ready to copy var name
+            case 2:
+                reset_str(tmp);
+                state = 3;
+                break;
+            // actually copying var name into tmp
+            case 3:
+                switch(str[idx]) {
+                    case '\0':
+                        add_str_char(s, '$');
+                        add_str_char(s, '(');
+                        add_str_str(s, tmp->buf);
+                        finished++;
+                        break;
+                    case ')':
+                        // index is required. syntax error
+                        fprintf(stderr, "cfg syntax error: %d: index is required near '%s'\n", get_line_no(), str);
+                        exit(1);
+                        break;
+                    case ',':
+                        idx++;
+                        var_idx = 0;
+                        state = 4;
+                        break;
+                    default:
+                        add_str_char(tmp, str[idx++]);
+                        break;
+                }
+                break;
+            // index specifier found, read a number
+            case 4: {
+                    int ch = str[idx];
+                    if(isdigit(ch) && ch != ')') {
+                        var_idx *= 10;
+                        var_idx += (ch - '0');
+                        idx++;
+                    }
+                    else if(ch == ')') {
+                        state = 5;
+                        idx++;
+                    }
+                    else {
+                        // invalid index. syntax error
+                        fprintf(stderr, "cfg syntax error: %d: invalid index near '%s'\n", get_line_no(), str);
+                        exit(1);
+                    }
+                }
+                break;
+            // var name and index has been found, do the substitution or replace
+            // the var in the string
+            case 5: {
+                    Value* val = findVal(tmp->buf);
+                    if(val == NULL)
+                        add_str_fmt(s, "$(%s,%d)", tmp->buf, var_idx);
+                    else {
+                        ValEntry* ve = getValEntry(val, var_idx);
+                        switch(ve->type) {
+                            case VAL_STR: add_str_fmt(s, "%s", ve->data.str); break;
+                            case VAL_NUM: add_str_fmt(s, "%ld", ve->data.num); break;
+                            case VAL_FNUM: add_str_fmt(s, "%f", ve->data.fnum); break;
+                            case VAL_BOOL: add_str_fmt(s, "%s", ve->data.bval? "TRUE": "FALSE"); break;
+                            default:
+                                // internal error, should never happen
+                                fprintf(stderr, "cfg internal error: unknown value type: %d", ve->type);
+                                exit(1);
+                                break;
+                        }
+                    }
+                    state = 0;
+                }
+                break;
+        }
+    }
+
+    return s->buf;
 }
 
 Value* createVal(const char* name)
@@ -229,61 +416,44 @@ ValEntry* iterateVal(Value* val)
         return NULL;
 }
 
+ValEntry* getValEntry(Value* val, int idx)
+{
+    assert(val != NULL);
+    assert(idx >= 0 && idx < val->list.len);
+
+    return val->list.list[idx];
+}
+
 const char* getValStr(Value* val, int idx)
 {
     assert(val != NULL);
-    assert(idx >= 0);
-    // TODO: perform string substitutions
+    assert(idx >= 0 && idx < val->list.len);
 
-    if(idx < val->list.len)
-        return (val->list.list[idx]->data.str);
-    else {
-        fprintf(stderr, "cfg access error: invalid index: %d\n", idx);
-        exit(1);
-    }
-    return NULL; // keep compiler happy
+    return do_str_subs(val->list.list[idx]->data.str);
 }
 
 double getValFnum(Value* val, int idx)
 {
     assert(val != NULL);
-    assert(idx >= 0);
+    assert(idx >= 0 && idx < val->list.len);
 
-    if(idx < val->list.len)
-        return (val->list.list[idx]->data.fnum);
-    else {
-        fprintf(stderr, "cfg access error: invalid index: %d\n", idx);
-        exit(1);
-    }
-    return 0; // keep compiler happy
+    return (val->list.list[idx]->data.fnum);
 }
 
 long int getValNum(Value* val, int idx)
 {
     assert(val != NULL);
-    assert(idx >= 0);
+    assert(idx >= 0 && idx < val->list.len);
 
-    if(idx < val->list.len)
-        return (val->list.list[idx]->data.num);
-    else {
-        fprintf(stderr, "cfg access error: invalid index: %d\n", idx);
-        exit(1);
-    }
-    return 0; // keep compiler happy
+    return (val->list.list[idx]->data.num);
 }
 
 unsigned char getValBool(Value* val, int idx)
 {
     assert(val != NULL);
-    assert(idx >= 0);
+    assert(idx >= 0 && idx < val->list.len);
 
-    if(idx < val->list.len)
-        return (val->list.list[idx]->data.bval);
-    else {
-        fprintf(stderr, "cfg access error: invalid index: %d\n", idx);
-        exit(1);
-    }
-    return 0; // keep compiler happy
+    return (val->list.list[idx]->data.bval);
 }
 
 const char* readValStr(const char* name, int idx)
@@ -292,13 +462,9 @@ const char* readValStr(const char* name, int idx)
     assert(idx >= 0);
 
     Value* val = findVal(name);
-    if(val != NULL)
-        return getValStr(val, idx);
-    else {
-        fprintf(stderr, "cfg access error: unknown name: %s\n", name);
-        exit(1);
-    }
-    return 0; // keep compiler happy
+    assert(val != NULL);
+
+    return getValStr(val, idx);
 }
 
 double readValFnum(const char* name, int idx)
@@ -307,13 +473,9 @@ double readValFnum(const char* name, int idx)
     assert(idx >= 0);
 
     Value* val = findVal(name);
-    if(val != NULL)
-        return getValFnum(val, idx);
-    else {
-        fprintf(stderr, "cfg access error: unknown name: %s\n", name);
-        exit(1);
-    }
-    return 0; // keep compiler happy
+    assert(val != NULL);
+
+    return getValFnum(val, idx);
 }
 
 long int readValNum(const char* name, int idx)
@@ -322,13 +484,9 @@ long int readValNum(const char* name, int idx)
     assert(idx >= 0);
 
     Value* val = findVal(name);
-    if(val != NULL)
-        return getValNum(val, idx);
-    else {
-        fprintf(stderr, "cfg access error: unknown name: %s\n", name);
-        exit(1);
-    }
-    return 0; // keep compiler happy
+    assert(val != NULL);
+
+    return getValNum(val, idx);
 }
 
 unsigned char readValBool(const char* name, int idx)
@@ -337,13 +495,9 @@ unsigned char readValBool(const char* name, int idx)
     assert(idx >= 0);
 
     Value* val = findVal(name);
-    if(val != NULL)
-        return getValBool(val, idx);
-    else {
-        fprintf(stderr, "cfg access error: unknown name: %s\n", name);
-        exit(1);
-    }
-    return 0; // keep compiler happy
+    assert(val != NULL);
+
+    return getValBool(val, idx);
 }
 
 /*

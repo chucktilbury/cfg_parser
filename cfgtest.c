@@ -24,5 +24,12 @@ int main()
 
     Value* val = findVal("name2134.some_numbers.number7");
     printf("value: %ld\n", getValNum(val, 0));
+
+    val = findVal("name2134.words");
+    printf("value: %s\n", getValStr(val, 0));
+
+    val = findVal("name2134.name2.bacon");
+    printf("value: %s\n", getValStr(val, 0));
+
     return retv;
 }
