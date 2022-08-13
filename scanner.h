@@ -13,6 +13,7 @@ const char* get_text();
 extern int cfg_lex(void);
 extern int cfg_parse(void);
 extern FILE *cfg_in;
+extern int cfg_debug;
 
 /*
  * Called by parser for syntax error.

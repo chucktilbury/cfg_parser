@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 
 #include "memory.h"
 #include "parser.h"
@@ -26,6 +27,8 @@ static FileStack* file_stack = NULL;
 
 void push_scanner_file(const char* fname)
 {
+    assert(fname != NULL);
+
     FileStack* fs = _alloc_ds(FileStack);
     fs->name = _copy_str(fname);
     fs->line_no = 1;
@@ -34,7 +37,7 @@ void push_scanner_file(const char* fname)
 
     cfg_in = fopen(fname, "r");
     if(cfg_in == NULL) {
-        fprintf(stderr, "cfg error: cannot open input file: %s\n", strerror(errno));
+        fprintf(stderr, "cfg error: cannot open input file: '%s' %s.\n", fname, strerror(errno));
         exit(1);
     }
     yy_switch_to_buffer(yy_create_buffer(cfg_in, YY_BUF_SIZE));
@@ -103,16 +106,13 @@ const char* get_text()
 
 %}
 
-%x DQUOTES SQUOTES NAME
+%x DQUOTES SQUOTES STR
 %option noinput noyywrap
-/* %option verbose debug */
+/*%option verbose debug*/
 
 CHARS   [a-zA-Z0-9_\-\$\%\@\!\~\^\&\*\(\)\+\[\]\\\|\;\,\<\>\.\/\?]
 
 %%
-
-\n          { increment_line_no(); }
-[ \t\r]     {}
 
 ("INCLUDE") { return INCLUDE; }
 ("TRUE")    { return TRUE; }
@@ -193,39 +193,48 @@ CHARS   [a-zA-Z0-9_\-\$\%\@\!\~\^\&\*\(\)\+\[\]\\\|\;\,\<\>\.\/\?]
 {CHARS}+ {
         __reset_buffer();
         __append_str(cfg_text);
-        BEGIN(NAME);
+        BEGIN(STR);
     }
-<NAME>\\n    { __append_char('\n'); }
-<NAME>\\r    { __append_char('\r'); }
-<NAME>\\e    { __append_char('\x1b'); }
-<NAME>\\t    { __append_char('\t'); }
-<NAME>\\b    { __append_char('\b'); }
-<NAME>\\f    { __append_char('\f'); }
-<NAME>\\v    { __append_char('\v'); }
-<NAME>\\\\   { __append_char('\\'); }
-<NAME>\\\"   { __append_char('\"'); }
-<NAME>\\\'   { __append_char('\''); }
-<NAME>\\\?   { __append_char('\?'); }
-<NAME>\\[0-7]{1,3} { __append_char((char)strtol(cfg_text+1, 0, 8));  }
-<NAME>\\[xX][0-9a-fA-F]{1,4} { __append_char((char)strtol(cfg_text+2, 0, 16));  }
-<NAME>[^ \t\r\n\:\=\{\}]+ { __append_str(cfg_text); }
-<NAME>\\.       { __append_char(cfg_text[1]); }
-<NAME>\n        {
+<STR>\\n    { __append_char('\n'); }
+<STR>\\r    { __append_char('\r'); }
+<STR>\\e    { __append_char('\x1b'); }
+<STR>\\t    { __append_char('\t'); }
+<STR>\\b    { __append_char('\b'); }
+<STR>\\f    { __append_char('\f'); }
+<STR>\\v    { __append_char('\v'); }
+<STR>\\\\   { __append_char('\\'); }
+<STR>\\\"   { __append_char('\"'); }
+<STR>\\\'   { __append_char('\''); }
+<STR>\\\?   { __append_char('\?'); }
+<STR>\\.    { __append_char(cfg_text[1]); }
+<STR>\\[0-7]{1,3} { __append_char((char)strtol(cfg_text+1, 0, 8));  }
+<STR>\\[xX][0-9a-fA-F]{1,4} { __append_char((char)strtol(cfg_text+2, 0, 16));  }
+<STR>[^ \t\r\n\:\=\{\}]+ { __append_str(cfg_text); }
+<STR>\n        {
         increment_line_no();
+        cfg_lval.string = _copy_str(buffer);
         BEGIN(INITIAL);
-        return NAME;
+        return STRING;
     }
-<NAME>[=:{}]    {
+<STR>[=:{}]    {
         unput(cfg_text[0]);
-        cfg_lval.name = _copy_str(buffer);
+        cfg_lval.string = _copy_str(buffer);
         BEGIN(INITIAL);
-        return NAME;
+        return STRING;
     }
+<STR>[ \r\t]+    {
+        cfg_lval.string = _copy_str(buffer);
+        BEGIN(INITIAL);
+        return STRING;
+    }
+
+\n          { increment_line_no(); }
+[ \t\r]     { /* ignore other WS */ }
 
     /* This pretty much should never happen */
 .   {
         fprintf(stderr, "cfg warning: %d: unrecognized character ignored: '%c' (0x%02X)\n",
-                    get_line_no(), yytext[0], yytext[0]);
+                    get_line_no(), cfg_text[0], cfg_text[0]);
     }
 
 <<EOF>> {

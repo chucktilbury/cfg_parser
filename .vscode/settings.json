@@ -30,6 +30,7 @@
         "QSTR",
         "qstrg",
         "realloc",
+        "retv",
         "SQUOTES",
         "stdbool",
         "stdlib",

@@ -5,7 +5,7 @@ project(config)
 find_package(FLEX REQUIRED)
 find_package(BISON REQUIRED)
 
-BISON_TARGET(PARSER parser.y ${CMAKE_CURRENT_BINARY_DIR}/parser.c COMPILE_FLAGS "--report=lookahead -tv --name-prefix=cfg_")
+BISON_TARGET(PARSER parser.y ${CMAKE_CURRENT_BINARY_DIR}/parser.c COMPILE_FLAGS "--report=lookahead -tkv --name-prefix=cfg_")
 FLEX_TARGET(SCANNER scanner.l  ${CMAKE_CURRENT_BINARY_DIR}/scanner.c COMPILE_FLAGS "-i --prefix=cfg_" )
 ADD_FLEX_BISON_DEPENDENCY(SCANNER PARSER)
 

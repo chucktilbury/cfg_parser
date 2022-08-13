@@ -30,71 +30,6 @@ static void add_value(Value* tree, Value* node)
     }
 }
 
-#if 0
-static void add_value_replace(Value* tree, Value* node)
-{
-    int x = strcmp(tree->name, node->name);
-    if(x > 0) {
-        if(tree->right != NULL)
-            add_value(tree->right, node);
-        else
-            tree->right = node;
-    }
-    else if(x < 0) {
-        if(tree->left != NULL)
-            add_value(tree->left, node);
-        else
-            tree->left = node;
-    }
-    else {
-        // discard the old values and replace them with the new values.
-
-    }
-}
-
-static void add_value_append(Value* tree, Value* node)
-{
-    int x = strcmp(tree->name, node->name);
-    if(x > 0) {
-        if(tree->right != NULL)
-            add_value(tree->right, node);
-        else
-            tree->right = node;
-    }
-    else if(x < 0) {
-        if(tree->left != NULL)
-            add_value(tree->left, node);
-        else
-            tree->left = node;
-    }
-    else {
-        // Append the values from the node to the values in the tree
-
-    }
-}
-
-static void add_value_prepend(Value* tree, Value* node)
-{
-    int x = strcmp(tree->name, node->name);
-    if(x > 0) {
-        if(tree->right != NULL)
-            add_value(tree->right, node);
-        else
-            tree->right = node;
-    }
-    else if(x < 0) {
-        if(tree->left != NULL)
-            add_value(tree->left, node);
-        else
-            tree->left = node;
-    }
-    else {
-        // Prepend the values in the node to the values in the tree.
-
-    }
-}
-#endif
-
 static Value* find_value(Value* tree, const char* key)
 {
     int x = strcmp(tree->name, key);
@@ -115,7 +50,7 @@ static Value* find_value(Value* tree, const char* key)
     }
 }
 
-static void add_val_entry(Value* val, ValEntry* ve)
+static void append_val_entry(Value* val, ValEntry* ve)
 {
     if(val->list.len+1 > val->list.cap) {
         val->list.cap <<= 1;
@@ -125,8 +60,22 @@ static void add_val_entry(Value* val, ValEntry* ve)
     val->list.len++;
 }
 
-Value* createValue(const char* name)
+static void prepend_val_entry(Value* val, ValEntry* ve)
 {
+    if(val->list.len+1 > val->list.cap) {
+        val->list.cap <<= 1;
+        val->list.list = _realloc_ds_array(val->list.list, ValEntry*, val->list.cap);
+    }
+
+    // TODO: fix me
+    val->list.list[val->list.len] = ve;
+    val->list.len++;
+}
+
+Value* createVal(const char* name)
+{
+    assert(name != NULL);
+
     Value* val = _alloc_ds(Value);
     val->name = _copy_str(&name[1]);
     _free(name);
@@ -146,18 +95,34 @@ Value* createValue(const char* name)
     return val;
 }
 
-void addValStr(Value* val, const char* str)
+void clearValList(Value* val)
+{
+    resetValIndex(val);
+    for(int i = 0; i < val->list.len; i++) {
+        ValEntry* ve = val->list.list[i];
+        if(ve->type == VAL_STR) {
+            _free(ve->data.str);
+        }
+        _free(ve);
+        val->list.list[i] = NULL; // in case GC is in use.
+    }
+    val->list.len = 0;
+    // does not change the list capacity
+}
+
+void appendValStr(Value* val, const char* str)
 {
     assert(val != NULL);
+    assert(str != NULL);
 
     ValEntry* ve = _alloc_ds(ValEntry);
     ve->type = VAL_STR;
     ve->data.str = str;
 
-    add_val_entry(val, ve);
+    append_val_entry(val, ve);
 }
 
-void addValFnum(Value* val, double num)
+void appendValFnum(Value* val, double num)
 {
     assert(val != NULL);
 
@@ -165,10 +130,10 @@ void addValFnum(Value* val, double num)
     ve->type = VAL_FNUM;
     ve->data.fnum = num;
 
-    add_val_entry(val, ve);
+    append_val_entry(val, ve);
 }
 
-void addValNum(Value* val, long int num)
+void appendValNum(Value* val, long int num)
 {
     assert(val != NULL);
 
@@ -176,10 +141,10 @@ void addValNum(Value* val, long int num)
     ve->type = VAL_NUM;
     ve->data.num = num;
 
-    add_val_entry(val, ve);
+    append_val_entry(val, ve);
 }
 
-void addValBool(Value* val, unsigned char bval)
+void appendValBool(Value* val, unsigned char bval)
 {
     assert(val != NULL);
 
@@ -187,10 +152,55 @@ void addValBool(Value* val, unsigned char bval)
     ve->type = VAL_BOOL;
     ve->data.bval = bval;
 
-    add_val_entry(val, ve);
+    append_val_entry(val, ve);
 }
 
-Value* findValue(const char* name)
+void prependValStr(Value* val, const char* str)
+{
+    assert(val != NULL);
+    assert(str != NULL);
+
+    ValEntry* ve = _alloc_ds(ValEntry);
+    ve->type = VAL_STR;
+    ve->data.str = str;
+
+    prepend_val_entry(val, ve);
+}
+
+void prependValFnum(Value* val, double num)
+{
+    assert(val != NULL);
+
+    ValEntry* ve = _alloc_ds(ValEntry);
+    ve->type = VAL_FNUM;
+    ve->data.fnum = num;
+
+    prepend_val_entry(val, ve);
+}
+
+void prependValNum(Value* val, long int num)
+{
+    assert(val != NULL);
+
+    ValEntry* ve = _alloc_ds(ValEntry);
+    ve->type = VAL_NUM;
+    ve->data.num = num;
+
+    prepend_val_entry(val, ve);
+}
+
+void prependValBool(Value* val, unsigned char bval)
+{
+    assert(val != NULL);
+
+    ValEntry* ve = _alloc_ds(ValEntry);
+    ve->type = VAL_BOOL;
+    ve->data.bval = bval;
+
+    prepend_val_entry(val, ve);
+}
+
+Value* findVal(const char* name)
 {
     assert(name != NULL);
 
@@ -200,13 +210,13 @@ Value* findValue(const char* name)
         return NULL;
 }
 
-void resetValueIndex(Value* val)
+void resetValIndex(Value* val)
 {
     assert(val != NULL);
     val->list.index = 0;
 }
 
-ValEntry* iterateValue(Value* val)
+ValEntry* iterateVal(Value* val)
 {
     assert(val != NULL);
 
@@ -217,5 +227,161 @@ ValEntry* iterateValue(Value* val)
     }
     else
         return NULL;
+}
+
+const char* getValStr(Value* val, int idx)
+{
+    assert(val != NULL);
+    assert(idx >= 0);
+    // TODO: perform string substitutions
+
+    if(idx < val->list.len)
+        return (val->list.list[idx]->data.str);
+    else {
+        fprintf(stderr, "cfg access error: invalid index: %d\n", idx);
+        exit(1);
+    }
+    return NULL; // keep compiler happy
+}
+
+double getValFnum(Value* val, int idx)
+{
+    assert(val != NULL);
+    assert(idx >= 0);
+
+    if(idx < val->list.len)
+        return (val->list.list[idx]->data.fnum);
+    else {
+        fprintf(stderr, "cfg access error: invalid index: %d\n", idx);
+        exit(1);
+    }
+    return 0; // keep compiler happy
+}
+
+long int getValNum(Value* val, int idx)
+{
+    assert(val != NULL);
+    assert(idx >= 0);
+
+    if(idx < val->list.len)
+        return (val->list.list[idx]->data.num);
+    else {
+        fprintf(stderr, "cfg access error: invalid index: %d\n", idx);
+        exit(1);
+    }
+    return 0; // keep compiler happy
+}
+
+unsigned char getValBool(Value* val, int idx)
+{
+    assert(val != NULL);
+    assert(idx >= 0);
+
+    if(idx < val->list.len)
+        return (val->list.list[idx]->data.bval);
+    else {
+        fprintf(stderr, "cfg access error: invalid index: %d\n", idx);
+        exit(1);
+    }
+    return 0; // keep compiler happy
+}
+
+const char* readValStr(const char* name, int idx)
+{
+    assert(name != NULL);
+    assert(idx >= 0);
+
+    Value* val = findVal(name);
+    if(val != NULL)
+        return getValStr(val, idx);
+    else {
+        fprintf(stderr, "cfg access error: unknown name: %s\n", name);
+        exit(1);
+    }
+    return 0; // keep compiler happy
+}
+
+double readValFnum(const char* name, int idx)
+{
+    assert(name != NULL);
+    assert(idx >= 0);
+
+    Value* val = findVal(name);
+    if(val != NULL)
+        return getValFnum(val, idx);
+    else {
+        fprintf(stderr, "cfg access error: unknown name: %s\n", name);
+        exit(1);
+    }
+    return 0; // keep compiler happy
+}
+
+long int readValNum(const char* name, int idx)
+{
+    assert(name != NULL);
+    assert(idx >= 0);
+
+    Value* val = findVal(name);
+    if(val != NULL)
+        return getValNum(val, idx);
+    else {
+        fprintf(stderr, "cfg access error: unknown name: %s\n", name);
+        exit(1);
+    }
+    return 0; // keep compiler happy
+}
+
+unsigned char readValBool(const char* name, int idx)
+{
+    assert(name != NULL);
+    assert(idx >= 0);
+
+    Value* val = findVal(name);
+    if(val != NULL)
+        return getValBool(val, idx);
+    else {
+        fprintf(stderr, "cfg access error: unknown name: %s\n", name);
+        exit(1);
+    }
+    return 0; // keep compiler happy
+}
+
+/*
+ * This is not a part of the actual API, but is used for debugging the config parser.
+ */
+void printValEntry(ValEntry* ve)
+{
+    switch(ve->type) {
+        case VAL_STR: printf("\t\t(STR)%s\n", ve->data.str); break;
+        case VAL_NUM: printf("\t\t(NUM)%ld\n", ve->data.num); break;
+        case VAL_FNUM: printf("\t\t(FNUM)%f\n", ve->data.fnum); break;
+        case VAL_BOOL: printf("\t\t(BOOL)%s\n", ve->data.bval? "true": "false"); break;
+        default: printf("\t\t(UNKNOWN)UNKNOWN (%d)", ve->type); break;
+    }
+}
+
+static void dump_values(Value* val)
+{
+    if(val->right != NULL)
+        dump_values(val->right);
+    if(val->left != NULL)
+        dump_values(val->left);
+
+    printf("\t%s:\n", val->name);
+    ValEntry* ve;
+    resetValIndex(val);
+    while(NULL != (ve = iterateVal(val))) {
+        printValEntry(ve);
+    }
+}
+
+void dumpValues()
+{
+    printf("\n--------- Dump Values -----------\n");
+    if(cfg_store != NULL)
+        dump_values(cfg_store);
+    else
+        printf("\tconfig store is empty\n");
+    printf("------- End Dump Values ---------\n");
 }
 
