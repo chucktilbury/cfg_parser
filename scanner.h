@@ -18,6 +18,6 @@ extern int cfg_debug;
 /*
  * Called by parser for syntax error.
  */
-void cfg_error(const char *s);
+void cfg_syntax(const char *s);
 
 #endif

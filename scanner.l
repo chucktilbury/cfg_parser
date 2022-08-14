@@ -1,14 +1,6 @@
 %{
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h>
-#include <string.h>
-#include <errno.h>
-#include <assert.h>
-
-#include "memory.h"
-#include "parser.h"
+#include "common.h"
 
 void yyerror(const char* s);
 
@@ -36,10 +28,9 @@ void push_scanner_file(const char* fname)
     fs->state = YY_CURRENT_BUFFER;
 
     cfg_in = fopen(fname, "r");
-    if(cfg_in == NULL) {
-        fprintf(stderr, "cfg error: cannot open input file: '%s' %s.\n", fname, strerror(errno));
-        exit(1);
-    }
+    if(cfg_in == NULL)
+        cfg_fatal_error("cfg error: cannot open input file: '%s' %s.", fname, strerror(errno));
+
     yy_switch_to_buffer(yy_create_buffer(cfg_in, YY_BUF_SIZE));
 
     fs->next = file_stack;
@@ -106,37 +97,58 @@ const char* get_text()
 
 %}
 
-%x DQUOTES SQUOTES STR
-%option noinput noyywrap
-/*%option verbose debug*/
-
-CHARS   [a-zA-Z0-9_\-\$\%\@\!\~\^\&\*\(\)\+\[\]\\\|\;\,\<\>\.\/\?]
+%x DQUOTES SQUOTES
+%option noinput noyywrap nounput
+/* %option verbose debug */
 
 %%
 
-("INCLUDE") { return INCLUDE; }
-("TRUE")    { return TRUE; }
-("FALSE")   { return FALSE; }
-("ON")      { return TRUE; }
-("OFF")     { return FALSE; }
+"INCLUDE"   { return INCLUDE; }
+"IF"        { return IF; }
+"ELSE"      { return ELSE; }
+"IFDEF"     { return IFDEF; }
+"IFNDEF"    { return IFNDEF; }
+"EQ"        { return EQ; }
+"NEQ"       { return NEQ; }
+"NOT"       { return NOT; }
+"DEFINE"    { return DEFINE; }
+"TRUE"|"ON" {
+        cfg_lval.literal = createLiteral(VAL_BOOL, cfg_text);
+        cfg_lval.literal->data.bval = 1;
+        return TRUE;
+    }
+"FALSE"|"OFF" {
+        cfg_lval.literal = createLiteral(VAL_BOOL, cfg_text);
+        cfg_lval.literal->data.bval = 0;
+        return FALSE;
+    }
+
 "="         { return '='; }
 ":"         { return ':'; }
 "{"         { return '{'; }
 "}"         { return '}'; }
+"("         { return '('; }
+")"         { return ')'; }
 
 [0-9]+ {
-        cfg_lval.num = strtol(yytext, NULL, 10);
+        //cfg_lval.num = strtol(yytext, NULL, 10);
+        cfg_lval.literal = createLiteral(VAL_NUM, cfg_text);
+        cfg_lval.literal->data.num = strtol(yytext, NULL, 10);
         return NUM;
     }
 
     /* recognize a float */
 [-+]?([0-9]*\.)?[0-9]+([Ee][-+]?[0-9]+)? {
-        cfg_lval.fnum = strtod(yytext, NULL);
+        //cfg_lval.fnum = strtod(yytext, NULL);
+        cfg_lval.literal = createLiteral(VAL_FNUM, cfg_text);
+        cfg_lval.literal->data.fnum = strtod(yytext, NULL);
         return FNUM;
     }
 
 0[xX][[:xdigit:]]+ {
-        cfg_lval.num = strtol(yytext, NULL, 16);
+        //cfg_lval.num = strtol(yytext, NULL, 16);
+        cfg_lval.literal = createLiteral(VAL_NUM, cfg_text);
+        cfg_lval.literal->data.num = strtol(yytext, NULL, 16);
         return NUM;
     }
 
@@ -147,7 +159,9 @@ CHARS   [a-zA-Z0-9_\-\$\%\@\!\~\^\&\*\(\)\+\[\]\\\|\;\,\<\>\.\/\?]
     }
 
 <DQUOTES>\" {
-        cfg_lval.qstr = _copy_str(buffer);
+        //cfg_lval.qstr = _copy_str(buffer);
+        cfg_lval.literal = createLiteral(VAL_QSTR, buffer);
+        cfg_lval.literal->data.str = cfg_lval.literal->str;
         BEGIN(INITIAL);
         return QSTR;
     }
@@ -178,7 +192,9 @@ CHARS   [a-zA-Z0-9_\-\$\%\@\!\~\^\&\*\(\)\+\[\]\\\|\;\,\<\>\.\/\?]
     }
 
 <SQUOTES>\' {
-        cfg_lval.qstr = _copy_str(buffer);
+        //cfg_lval.qstr = _copy_str(buffer);
+        cfg_lval.literal = createLiteral(VAL_QSTR, buffer);
+        cfg_lval.literal->data.str = cfg_lval.literal->str;
         BEGIN(INITIAL);
         return QSTR;
     }
@@ -190,51 +206,18 @@ CHARS   [a-zA-Z0-9_\-\$\%\@\!\~\^\&\*\(\)\+\[\]\\\|\;\,\<\>\.\/\?]
 "#".*   { /* do nothing */ }
 
     /* Scan a name */
-{CHARS}+ {
-        __reset_buffer();
-        __append_str(cfg_text);
-        BEGIN(STR);
-    }
-<STR>\\n    { __append_char('\n'); }
-<STR>\\r    { __append_char('\r'); }
-<STR>\\e    { __append_char('\x1b'); }
-<STR>\\t    { __append_char('\t'); }
-<STR>\\b    { __append_char('\b'); }
-<STR>\\f    { __append_char('\f'); }
-<STR>\\v    { __append_char('\v'); }
-<STR>\\\\   { __append_char('\\'); }
-<STR>\\\"   { __append_char('\"'); }
-<STR>\\\'   { __append_char('\''); }
-<STR>\\\?   { __append_char('\?'); }
-<STR>\\.    { __append_char(cfg_text[1]); }
-<STR>\\[0-7]{1,3} { __append_char((char)strtol(cfg_text+1, 0, 8));  }
-<STR>\\[xX][0-9a-fA-F]{1,4} { __append_char((char)strtol(cfg_text+2, 0, 16));  }
-<STR>[^ \t\r\n\:\=\{\}]+ { __append_str(cfg_text); }
-<STR>\n        {
-        increment_line_no();
-        cfg_lval.string = _copy_str(buffer);
-        BEGIN(INITIAL);
-        return STRING;
-    }
-<STR>[=:{}]    {
-        unput(cfg_text[0]);
-        cfg_lval.string = _copy_str(buffer);
-        BEGIN(INITIAL);
-        return STRING;
-    }
-<STR>[ \r\t]+    {
-        cfg_lval.string = _copy_str(buffer);
-        BEGIN(INITIAL);
-        return STRING;
+[a-zA-Z0-9_$%&\-]+ {
+        cfg_lval.literal = createLiteral(VAL_QSTR, cfg_text);
+        cfg_lval.literal->data.str = _copy_str(cfg_text);
+        return NAME;
     }
 
 \n          { increment_line_no(); }
-[ \t\r]     { /* ignore other WS */ }
+[ \t\r]     { /* ignore white space */ }
 
     /* This pretty much should never happen */
 .   {
-        fprintf(stderr, "cfg warning: %d: unrecognized character ignored: '%c' (0x%02X)\n",
-                    get_line_no(), cfg_text[0], cfg_text[0]);
+        cfg_warning("unrecognized character ignored: '%c' (0x%02X)", cfg_text[0], cfg_text[0]);
     }
 
 <<EOF>> {

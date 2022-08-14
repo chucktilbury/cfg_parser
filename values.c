@@ -1,13 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
-#include <stdarg.h>
-#include <assert.h>
 
-#include "scanner.h"
-#include "memory.h"
-#include "values.h"
+#include "common.h"
+#include <stdarg.h>
 
 static Value* cfg_store = NULL;
 
@@ -119,26 +112,56 @@ static Value* find_value(Value* tree, const char* key)
     }
 }
 
-static void append_val_entry(Value* val, ValEntry* ve)
+static void append_val_entry(Value* val, Literal* ve)
 {
-    if(val->list.len+1 > val->list.cap) {
-        val->list.cap <<= 1;
-        val->list.list = _realloc_ds_array(val->list.list, ValEntry*, val->list.cap);
+    LiteralList* list = val->list;
+    if(list->last != NULL) {
+        ve->prev = list->last;
+        list->last->next = ve;
     }
-    val->list.list[val->list.len] = ve;
-    val->list.len++;
+    else
+        list->first = ve;
+
+    list->last = ve;
 }
 
-static void prepend_val_entry(Value* val, ValEntry* ve)
+static void prepend_val_entry(Value* val, Literal* ve)
 {
-    if(val->list.len+1 > val->list.cap) {
-        val->list.cap <<= 1;
-        val->list.list = _realloc_ds_array(val->list.list, ValEntry*, val->list.cap);
+    LiteralList* list = val->list;
+    if(list->first != NULL) {
+        ve->next = list->first;
+        list->first->prev = ve;
     }
+    else
+        list->last = ve;
+    list->first = ve;
+}
 
-    // TODO: fix me
-    val->list.list[val->list.len] = ve;
-    val->list.len++;
+static void replace_val_entry(Value* val, Literal* ve, int index)
+{
+    Literal* tmp = NULL;
+    int i;
+
+    resetValIndex(val);
+    for(i = 0, tmp = iterateVal(val);
+        i < index && tmp != NULL;
+        i++, tmp = iterateVal(val)) { /* do nothing here */ }
+
+    if(tmp == NULL)
+        append_val_entry(val, ve);
+    else {
+        ve->next = tmp->next;
+        ve->prev = tmp->prev;
+        if(ve->next != NULL)
+            ve->next->prev = ve;
+        if(ve->prev != NULL)
+            ve->prev->next = ve;
+
+        if(tmp->type == VAL_QSTR)
+            _free(tmp->data.str);
+        _free(tmp);
+
+    }
 }
 
 /*
@@ -233,13 +256,13 @@ static const char* do_str_subs(const char* str)
             // var name and index has been found, do the substitution or replace
             // the var in the string
             case 5: {
-                    Value* val = findVal(tmp->buf);
+                    Value* val = findValue(tmp->buf);
                     if(val == NULL)
                         add_str_fmt(s, "$(%s,%d)", tmp->buf, var_idx);
                     else {
-                        ValEntry* ve = getValEntry(val, var_idx);
+                        Literal* ve = getLiteral(val, var_idx);
                         switch(ve->type) {
-                            case VAL_STR: add_str_fmt(s, "%s", ve->data.str); break;
+                            case VAL_QSTR: add_str_fmt(s, "%s", ve->data.str); break;
                             case VAL_NUM: add_str_fmt(s, "%ld", ve->data.num); break;
                             case VAL_FNUM: add_str_fmt(s, "%f", ve->data.fnum); break;
                             case VAL_BOOL: add_str_fmt(s, "%s", ve->data.bval? "TRUE": "FALSE"); break;
@@ -269,10 +292,10 @@ Value* createVal(const char* name)
     val->left = NULL;
     val->right = NULL;
 
-    val->list.cap = 1;
-    val->list.len = 0;
-    val->list.index = 0;
-    val->list.list = _alloc_ds_array(ValEntry*, val->list.cap);
+    val->list = _alloc_ds(LiteralList);
+    val->list->first =
+        val->list->last =
+        val->list->index = NULL;
 
     if(cfg_store != NULL)
         add_value(cfg_store, val); // there is nothing in the value yet.
@@ -282,112 +305,108 @@ Value* createVal(const char* name)
     return val;
 }
 
+Literal* createLiteral(ValType type, const char* str)
+{
+    Literal* lit = _alloc_ds(Literal);
+    lit->type = type;
+    lit->str = _copy_str(str);
+    switch(type) {
+        case VAL_QSTR:  lit->data.str = str; break;
+        case VAL_NUM:   lit->data.num = strtol(str, NULL, 10); break;
+        case VAL_FNUM:  lit->data.fnum = strtod(str, NULL); break;
+        case VAL_BOOL:  lit->data.bval = (strcmp(str, "false"))? 1: 0; break;
+        default:        cfg_fatal_error("unknown value type: %d");
+    }
+
+    return lit;
+}
+
 void clearValList(Value* val)
 {
-    resetValIndex(val);
-    for(int i = 0; i < val->list.len; i++) {
-        ValEntry* ve = val->list.list[i];
-        if(ve->type == VAL_STR) {
-            _free(ve->data.str);
+    assert(val != NULL);
+
+    Literal* elem;
+    Literal* next;
+
+    for(elem = val->list->first; elem != NULL; elem = next) {
+        next = elem->next;
+        if(elem->type == VAL_QSTR) {
+            _free(elem->data.str);
+            elem->data.str = NULL;  // in case GC is in use.
         }
-        _free(ve);
-        val->list.list[i] = NULL; // in case GC is in use.
+        _free(elem);
+        elem = NULL;
     }
-    val->list.len = 0;
-    // does not change the list capacity
 }
 
-void appendValStr(Value* val, const char* str)
+void appendLiteral(Value* val, Literal* lit) { append_val_entry(val, lit); }
+void prependLiteral(Value* val, Literal* lit) { prepend_val_entry(val, lit); }
+void replaceLiteral(Value* val, Literal* lit, int index) { replace_val_entry(val, lit, index); }
+Literal* getLiteral(Value* val, int index)
 {
-    assert(val != NULL);
-    assert(str != NULL);
+    Literal* tmp = NULL;
+    int i;
 
-    ValEntry* ve = _alloc_ds(ValEntry);
-    ve->type = VAL_STR;
-    ve->data.str = str;
+    resetValIndex(val);
+    for(i = 0, tmp = iterateVal(val);
+        i < index && tmp != NULL;
+        i++, tmp = iterateVal(val)) { /* do nothing here */ }
 
-    append_val_entry(val, ve);
+    return tmp; // NULL if the index is invalid
 }
 
-void appendValFnum(Value* val, double num)
+ValType checkLiteralType(Value* val, int index)
 {
-    assert(val != NULL);
-
-    ValEntry* ve = _alloc_ds(ValEntry);
-    ve->type = VAL_FNUM;
-    ve->data.fnum = num;
-
-    append_val_entry(val, ve);
+    Literal* lit = getLiteral(val, index);
+    if(lit != NULL)
+        return lit->type;
+    else
+        return VAL_ERROR;
 }
 
-void appendValNum(Value* val, long int num)
+const char* getLiteralAsStr(Value* val, int index)
 {
-    assert(val != NULL);
-
-    ValEntry* ve = _alloc_ds(ValEntry);
-    ve->type = VAL_NUM;
-    ve->data.num = num;
-
-    append_val_entry(val, ve);
+    Literal* lit = getLiteral(val, index);
+    if(lit != NULL && lit->type == VAL_QSTR)
+        return lit->data.str;
+    else
+        return lit->str;
 }
 
-void appendValBool(Value* val, unsigned char bval)
+long int getLiteralAsNum(Value* val, int index)
 {
-    assert(val != NULL);
-
-    ValEntry* ve = _alloc_ds(ValEntry);
-    ve->type = VAL_BOOL;
-    ve->data.bval = bval;
-
-    append_val_entry(val, ve);
+    Literal* lit = getLiteral(val, index);
+    if(lit != NULL && lit->type == VAL_NUM)
+        return lit->data.num;
+    else {
+        cfg_warning("attempt to get a %s as a NUM", literalTypeToStr(lit->type));
+        return strtol(lit->str, NULL, 10);
+    }
 }
 
-void prependValStr(Value* val, const char* str)
+double getLiteralAsFnum(Value* val, int index)
 {
-    assert(val != NULL);
-    assert(str != NULL);
-
-    ValEntry* ve = _alloc_ds(ValEntry);
-    ve->type = VAL_STR;
-    ve->data.str = str;
-
-    prepend_val_entry(val, ve);
+    Literal* lit = getLiteral(val, index);
+    if(lit != NULL && lit->type == VAL_FNUM)
+        return lit->data.fnum;
+    else {
+        cfg_warning("attempt to get a %s as a FNUM", literalTypeToStr(lit->type));
+        return strtod(lit->str, NULL);
+    }
 }
 
-void prependValFnum(Value* val, double num)
+unsigned char getLiteralAsBool(Value* val, int index)
 {
-    assert(val != NULL);
-
-    ValEntry* ve = _alloc_ds(ValEntry);
-    ve->type = VAL_FNUM;
-    ve->data.fnum = num;
-
-    prepend_val_entry(val, ve);
+    Literal* lit = getLiteral(val, index);
+    if(lit != NULL && lit->type == VAL_BOOL)
+        return lit->data.bval;
+    else {
+        cfg_warning("attempt to get a %s as a BOOL", literalTypeToStr(lit->type));
+        return 0;
+    }
 }
 
-void prependValNum(Value* val, long int num)
-{
-    assert(val != NULL);
-
-    ValEntry* ve = _alloc_ds(ValEntry);
-    ve->type = VAL_NUM;
-    ve->data.num = num;
-
-    prepend_val_entry(val, ve);
-}
-
-void prependValBool(Value* val, unsigned char bval)
-{
-    assert(val != NULL);
-
-    ValEntry* ve = _alloc_ds(ValEntry);
-    ve->type = VAL_BOOL;
-    ve->data.bval = bval;
-
-    prepend_val_entry(val, ve);
-}
-
-Value* findVal(const char* name)
+Value* findValue(const char* name)
 {
     assert(name != NULL);
 
@@ -400,120 +419,81 @@ Value* findVal(const char* name)
 void resetValIndex(Value* val)
 {
     assert(val != NULL);
-    val->list.index = 0;
+    val->list->index = val->list->first;
 }
 
-ValEntry* iterateVal(Value* val)
+Literal* iterateVal(Value* val)
 {
     assert(val != NULL);
 
-    if(val->list.index < val->list.len) {
-        ValEntry* ve = val->list.list[val->list.index];
-        val->list.index++;
-        return ve; // clarity, thank you.
-    }
+    Literal* lit = val->list->index;
+    if(lit != NULL)
+        val->list->index = lit->next;
+    return lit;
+}
+
+const char* formatStrLiteral(const char* str)
+{
+    return do_str_subs(str);
+}
+
+void printLiteralVal(Literal* lit)
+{
+    if(lit != NULL)
+        printf("(%s)%s", literalTypeToStr(lit->type), literalValToStr(lit));
     else
-        return NULL;
+        cfg_fatal_error("attempt to print a NULL literal value");
 }
 
-ValEntry* getValEntry(Value* val, int idx)
+const char* literalTypeToStr(ValType type)
 {
-    assert(val != NULL);
-    assert(idx >= 0 && idx < val->list.len);
-
-    return val->list.list[idx];
+    return (type == VAL_ERROR)? "ERROR":
+            (type == VAL_QSTR)? "QSTR":
+            (type == VAL_NUM)? "NUM":
+            (type == VAL_FNUM)? "FNUM":
+            (type == VAL_BOOL)? "BOOL": "UNKNOWN";
 }
 
-const char* getValStr(Value* val, int idx)
+const char* literalValToStr(Literal* lit)
 {
-    assert(val != NULL);
-    assert(idx >= 0 && idx < val->list.len);
+    char* outstr = NULL;
 
-    return do_str_subs(val->list.list[idx]->data.str);
-}
+    switch(lit->type) {
+        case VAL_QSTR:
+            outstr = (char*)do_str_subs(lit->data.str);
+            break;
+        case VAL_ERROR:
+            outstr = _copy_str("ERROR");
+            break;
+        case VAL_NUM: {
+                int len = snprintf(NULL, 0, "%ld", lit->data.num);
+                outstr = _alloc(len+1);
+                sprintf(outstr, "%ld", lit->data.num);
+            }
+            break;
+        case VAL_FNUM: {
+                int len = snprintf(NULL, 0, "%f", lit->data.fnum);
+                outstr = _alloc(len+1);
+                sprintf(outstr, "%f", lit->data.fnum);
+            }
+            break;
+        case VAL_BOOL: {
+                int len = snprintf(NULL, 0, "%s", lit->data.bval? "true": "false");
+                outstr = _alloc(len+1);
+                sprintf(outstr, "%s", lit->data.bval? "true": "false");
+            }
+            break;
+        default:
+            cfg_fatal_error("unknown literal type: %d", lit->type);
+            break;
+    }
 
-double getValFnum(Value* val, int idx)
-{
-    assert(val != NULL);
-    assert(idx >= 0 && idx < val->list.len);
-
-    return (val->list.list[idx]->data.fnum);
-}
-
-long int getValNum(Value* val, int idx)
-{
-    assert(val != NULL);
-    assert(idx >= 0 && idx < val->list.len);
-
-    return (val->list.list[idx]->data.num);
-}
-
-unsigned char getValBool(Value* val, int idx)
-{
-    assert(val != NULL);
-    assert(idx >= 0 && idx < val->list.len);
-
-    return (val->list.list[idx]->data.bval);
-}
-
-const char* readValStr(const char* name, int idx)
-{
-    assert(name != NULL);
-    assert(idx >= 0);
-
-    Value* val = findVal(name);
-    assert(val != NULL);
-
-    return getValStr(val, idx);
-}
-
-double readValFnum(const char* name, int idx)
-{
-    assert(name != NULL);
-    assert(idx >= 0);
-
-    Value* val = findVal(name);
-    assert(val != NULL);
-
-    return getValFnum(val, idx);
-}
-
-long int readValNum(const char* name, int idx)
-{
-    assert(name != NULL);
-    assert(idx >= 0);
-
-    Value* val = findVal(name);
-    assert(val != NULL);
-
-    return getValNum(val, idx);
-}
-
-unsigned char readValBool(const char* name, int idx)
-{
-    assert(name != NULL);
-    assert(idx >= 0);
-
-    Value* val = findVal(name);
-    assert(val != NULL);
-
-    return getValBool(val, idx);
+    return outstr;
 }
 
 /*
  * This is not a part of the actual API, but is used for debugging the config parser.
  */
-void printValEntry(ValEntry* ve)
-{
-    switch(ve->type) {
-        case VAL_STR: printf("\t\t(STR)%s\n", ve->data.str); break;
-        case VAL_NUM: printf("\t\t(NUM)%ld\n", ve->data.num); break;
-        case VAL_FNUM: printf("\t\t(FNUM)%f\n", ve->data.fnum); break;
-        case VAL_BOOL: printf("\t\t(BOOL)%s\n", ve->data.bval? "true": "false"); break;
-        default: printf("\t\t(UNKNOWN)UNKNOWN (%d)", ve->type); break;
-    }
-}
-
 static void dump_values(Value* val)
 {
     if(val->right != NULL)
@@ -522,10 +502,12 @@ static void dump_values(Value* val)
         dump_values(val->left);
 
     printf("\t%s:\n", val->name);
-    ValEntry* ve;
+    Literal* ve;
     resetValIndex(val);
     while(NULL != (ve = iterateVal(val))) {
-        printValEntry(ve);
+        printf("\t\t");
+        printLiteralVal(ve);
+        printf("\n");
     }
 }
 

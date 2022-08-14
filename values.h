@@ -2,69 +2,62 @@
 #define VALUES_H
 
 typedef enum {
-    VAL_STR,
+    VAL_ERROR,
+    VAL_QSTR,
     VAL_NUM,
     VAL_FNUM,
     VAL_BOOL,
 } ValType;
 
-typedef struct {
+typedef struct _literal {
     ValType type;
+    const char* str;
     union {
         const char* str;
         double fnum;
         long int num;
         unsigned char bval;
     } data;
-} ValEntry;
+    struct _literal* prev;
+    struct _literal* next;
+} Literal;
 
 typedef struct {
-    ValEntry** list;
-    int cap;
-    int len;
-    int index;
-} ValList;
+    Literal* first;
+    Literal* last;
+    Literal* index;
+} LiteralList;
 
 typedef struct _value {
     const char* name;
-    ValList list;
+    LiteralList* list;
     struct _value* left;
     struct _value* right;
 } Value;
 
 Value* createVal(const char* name);
+Literal* createLiteral(ValType type, const char* str);
 
 void clearValList(Value* val);
 
-void appendValStr(Value* val, const char* str);
-void appendValFnum(Value* val, double num);
-void appendValNum(Value* val, long int num);
-void appendValBool(Value* val, unsigned char bval);
+void appendLiteral(Value* val, Literal* lit);
+void prependLiteral(Value* val, Literal* lit);
+void replaceLiteral(Value* val, Literal* lit, int index);
 
-void prependValStr(Value* val, const char* str);
-void prependValFnum(Value* val, double num);
-void prependValNum(Value* val, long int num);
-void prependValBool(Value* val, unsigned char bval);
+ValType checkLiteralType(Value* val, int index);
+Literal* getLiteral(Value* val, int index);
+const char* getLiteralAsStr(Value* val, int index);
+long int getLiteralAsNum(Value* val, int index);
+double getLiteralAsFnum(Value* val, int index);
+unsigned char getLiteralAsBool(Value* val, int index);
 
-const char* getValStr(Value* val, int idx);
-double getValFnum(Value* val, int idx);
-long int getValNum(Value* val, int idx);
-unsigned char getValBool(Value* val, int idx);
-
-const char* readValStr(const char* val, int idx);
-double readValFnum(const char* val, int idx);
-long int readValNum(const char* val, int idx);
-unsigned char readValBool(const char* val, int idx);
-
-Value* findVal(const char* name);
+Value* findValue(const char* name);
+const char* formatStrLiteral(const char* str);
 
 void resetValIndex(Value* val);
-ValEntry* iterateVal(Value* val);
-ValEntry* getValEntry(Value* val, int idx);
-
-#define VAL_ENTRY_AS_STR(ve)    ((ve)->data.str)
-#define VAL_ENTRY_AS_FNUM(ve)   ((ve)->data.fnum)
-#define VAL_ENTRY_AS_NUM(ve)    ((ve)->data.num)
-#define VAL_ENTRY_AS_BOOL(ve)   ((ve)->data.bval)
+Literal* iterateVal(Value* val);
+void printLiteralVal(Literal* ve);
+const char* literalTypeToStr(ValType type);
+const char* literalValToStr(Literal* lit);
 
 #endif

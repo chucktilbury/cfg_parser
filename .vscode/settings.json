@@ -27,6 +27,7 @@
         "Ofast",
         "OSQU",
         "OSUBS",
+        "outstr",
         "QSTR",
         "qstrg",
         "realloc",
