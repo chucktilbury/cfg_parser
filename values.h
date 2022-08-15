@@ -3,7 +3,8 @@
 
 typedef enum {
     VAL_ERROR,
-    VAL_QSTR,
+    VAL_NAME,
+    VAL_STR,
     VAL_NUM,
     VAL_FNUM,
     VAL_BOOL,
@@ -59,5 +60,7 @@ Literal* iterateVal(Value* val);
 void printLiteralVal(Literal* ve);
 const char* literalTypeToStr(ValType type);
 const char* literalValToStr(Literal* lit);
+
+#define valueToStr(n, i) literalValToStr(getLiteral(findValue(n), (i)))
 
 #endif

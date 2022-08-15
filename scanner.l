@@ -160,7 +160,7 @@ const char* get_text()
 
 <DQUOTES>\" {
         //cfg_lval.qstr = _copy_str(buffer);
-        cfg_lval.literal = createLiteral(VAL_QSTR, buffer);
+        cfg_lval.literal = createLiteral(VAL_STR, buffer);
         cfg_lval.literal->data.str = cfg_lval.literal->str;
         BEGIN(INITIAL);
         return QSTR;
@@ -193,7 +193,7 @@ const char* get_text()
 
 <SQUOTES>\' {
         //cfg_lval.qstr = _copy_str(buffer);
-        cfg_lval.literal = createLiteral(VAL_QSTR, buffer);
+        cfg_lval.literal = createLiteral(VAL_STR, buffer);
         cfg_lval.literal->data.str = cfg_lval.literal->str;
         BEGIN(INITIAL);
         return QSTR;
@@ -206,8 +206,8 @@ const char* get_text()
 "#".*   { /* do nothing */ }
 
     /* Scan a name */
-[a-zA-Z0-9_$%&\-]+ {
-        cfg_lval.literal = createLiteral(VAL_QSTR, cfg_text);
+[a-zA-Z0-9_$%&\-\.]+ {
+        cfg_lval.literal = createLiteral(VAL_NAME, cfg_text);
         cfg_lval.literal->data.str = _copy_str(cfg_text);
         return NAME;
     }

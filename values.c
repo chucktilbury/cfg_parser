@@ -157,7 +157,7 @@ static void replace_val_entry(Value* val, Literal* ve, int index)
         if(ve->prev != NULL)
             ve->prev->next = ve;
 
-        if(tmp->type == VAL_QSTR)
+        if(tmp->type == VAL_STR)
             _free(tmp->data.str);
         _free(tmp);
 
@@ -257,12 +257,14 @@ static const char* do_str_subs(const char* str)
             // the var in the string
             case 5: {
                     Value* val = findValue(tmp->buf);
-                    if(val == NULL)
+                    if(val == NULL) {
                         add_str_fmt(s, "$(%s,%d)", tmp->buf, var_idx);
+                    }
                     else {
                         Literal* ve = getLiteral(val, var_idx);
                         switch(ve->type) {
-                            case VAL_QSTR: add_str_fmt(s, "%s", ve->data.str); break;
+                            case VAL_STR: add_str_fmt(s, "%s", ve->data.str); break;
+                            case VAL_NAME: add_str_fmt(s, "%s", ve->data.str); break;
                             case VAL_NUM: add_str_fmt(s, "%ld", ve->data.num); break;
                             case VAL_FNUM: add_str_fmt(s, "%f", ve->data.fnum); break;
                             case VAL_BOOL: add_str_fmt(s, "%s", ve->data.bval? "TRUE": "FALSE"); break;
@@ -287,7 +289,10 @@ Value* createVal(const char* name)
     assert(name != NULL);
 
     Value* val = _alloc_ds(Value);
-    val->name = _copy_str(&name[1]);
+    if(name[0] == '.')
+        val->name = _copy_str(&name[1]);
+    else
+        val->name = _copy_str(name);
     _free(name);
     val->left = NULL;
     val->right = NULL;
@@ -310,8 +315,14 @@ Literal* createLiteral(ValType type, const char* str)
     Literal* lit = _alloc_ds(Literal);
     lit->type = type;
     lit->str = _copy_str(str);
+    lit->prev = NULL;
+    lit->next = NULL;
+
     switch(type) {
-        case VAL_QSTR:  lit->data.str = str; break;
+        case VAL_STR:
+        case VAL_NAME:
+            lit->data.str = str;
+            break;
         case VAL_NUM:   lit->data.num = strtol(str, NULL, 10); break;
         case VAL_FNUM:  lit->data.fnum = strtod(str, NULL); break;
         case VAL_BOOL:  lit->data.bval = (strcmp(str, "false"))? 1: 0; break;
@@ -330,7 +341,7 @@ void clearValList(Value* val)
 
     for(elem = val->list->first; elem != NULL; elem = next) {
         next = elem->next;
-        if(elem->type == VAL_QSTR) {
+        if(elem->type == VAL_STR) {
             _free(elem->data.str);
             elem->data.str = NULL;  // in case GC is in use.
         }
@@ -367,7 +378,7 @@ ValType checkLiteralType(Value* val, int index)
 const char* getLiteralAsStr(Value* val, int index)
 {
     Literal* lit = getLiteral(val, index);
-    if(lit != NULL && lit->type == VAL_QSTR)
+    if(lit != NULL && lit->type == VAL_STR)
         return lit->data.str;
     else
         return lit->str;
@@ -427,8 +438,11 @@ Literal* iterateVal(Value* val)
     assert(val != NULL);
 
     Literal* lit = val->list->index;
-    if(lit != NULL)
+    if(lit != NULL) {
+        //printf(">> literal: %p\n", lit);
         val->list->index = lit->next;
+    }
+
     return lit;
 }
 
@@ -448,8 +462,9 @@ void printLiteralVal(Literal* lit)
 const char* literalTypeToStr(ValType type)
 {
     return (type == VAL_ERROR)? "ERROR":
-            (type == VAL_QSTR)? "QSTR":
+            (type == VAL_STR)? "STR":
             (type == VAL_NUM)? "NUM":
+            (type == VAL_NAME)? "NAME":
             (type == VAL_FNUM)? "FNUM":
             (type == VAL_BOOL)? "BOOL": "UNKNOWN";
 }
@@ -459,7 +474,10 @@ const char* literalValToStr(Literal* lit)
     char* outstr = NULL;
 
     switch(lit->type) {
-        case VAL_QSTR:
+        case VAL_NAME:
+            outstr = _copy_str(lit->data.str);
+            break;
+        case VAL_STR:
             outstr = (char*)do_str_subs(lit->data.str);
             break;
         case VAL_ERROR:
@@ -501,12 +519,14 @@ static void dump_values(Value* val)
     if(val->left != NULL)
         dump_values(val->left);
 
+    //printf("\r%p\n", val);
     printf("\t%s:\n", val->name);
     Literal* ve;
     resetValIndex(val);
     while(NULL != (ve = iterateVal(val))) {
         printf("\t\t");
-        printLiteralVal(ve);
+        //printLiteralVal(ve);
+        printf("\t(%s)%s", literalTypeToStr(ve->type), ve->str);
         printf("\n");
     }
 }

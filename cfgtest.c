@@ -75,7 +75,11 @@ int main()
     printf("value: ");
     printLiteralVal(lit);
     printf("\n");
+    printf("\t-or- %s\n", valueToStr("name2134.name2.bacon", 0));
     // printf("value: %s\n", getValStr(val, 0));
+
+    printf("value: %s\n", valueToStr("name2134.some_numbers.Gabba.jubjub", 0));
+
 
     return retv;
 }

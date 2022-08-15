@@ -102,6 +102,10 @@ include_clause
             if(storage_flag)
                 push_scanner_file($2->str); // formatting not supported
         }
+    | INCLUDE NAME {
+            if(storage_flag)
+                push_scanner_file($2->str); // formatting not supported
+        }
     ;
 
 value_literal
@@ -118,7 +122,9 @@ value_literal_list
     ;
 
 define_clause
-    : DEFINE NAME value_literal {}
+    : DEFINE NAME value_literal {
+            appendLiteral(createVal($2->str), $3);
+        }
     ;
 
 section_clause
@@ -126,8 +132,8 @@ section_clause
     ;
 
 bool_value
-    : TRUE {}
-    | FALSE {}
+    : TRUE
+    | FALSE
     ;
 
 section_body
@@ -170,7 +176,7 @@ expression
     : value_literal
     | expression EQ expression {}
     | expression NEQ expression {}
-    | '(' expression ')' {}
+    | '(' expression ')'
     | NOT expression %prec NEGATE {}
     ;
 
