@@ -3,7 +3,7 @@
 
 int get_line_no();
 const char* get_file_name();
-void push_scanner_file(const char* fname);
+void push_cfg_file(const char* fname);
 const char* get_text();
 
 /*

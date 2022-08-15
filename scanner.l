@@ -17,7 +17,7 @@ typedef struct _file_stack {
 
 static FileStack* file_stack = NULL;
 
-void push_scanner_file(const char* fname)
+void push_cfg_file(const char* fname)
 {
     assert(fname != NULL);
 
@@ -240,3 +240,4 @@ const char* get_text()
 
 
 %%
+

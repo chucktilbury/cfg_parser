@@ -51,7 +51,7 @@ void dumpValues();
 int main()
 {
     //cfg_debug = 1;
-    push_scanner_file("../test.cfg");
+    push_cfg_file("../test.cfg");
     int retv = cfg_parse();
     dumpValues();
 
