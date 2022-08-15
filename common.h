@@ -13,6 +13,7 @@
 #include "values.h"
 #include "parser.h"
 #include "scanner.h"
+#include "errors.h"
 
 void cfg_fatal_error(const char* fmt, ...);
 void cfg_warning(const char* fmt, ...);

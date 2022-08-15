@@ -350,9 +350,27 @@ void clearValList(Value* val)
     }
 }
 
-void appendLiteral(Value* val, Literal* lit) { append_val_entry(val, lit); }
-void prependLiteral(Value* val, Literal* lit) { prepend_val_entry(val, lit); }
-void replaceLiteral(Value* val, Literal* lit, int index) { replace_val_entry(val, lit, index); }
+void appendLiteral(Value* val, Literal* lit)
+{
+    assert(val != NULL);
+    assert(lit != NULL);
+    append_val_entry(val, lit);
+}
+
+void prependLiteral(Value* val, Literal* lit)
+{
+    assert(val != NULL);
+    assert(lit != NULL);
+    prepend_val_entry(val, lit);
+}
+
+void replaceLiteral(Value* val, Literal* lit, int index)
+{
+    assert(val != NULL);
+    assert(lit != NULL);
+    replace_val_entry(val, lit, index);
+}
+
 Literal* getLiteral(Value* val, int index)
 {
     Literal* tmp = NULL;

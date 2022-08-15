@@ -97,6 +97,11 @@ static void pop_section_name()
 
 static const char* make_var_name(const char* name)
 {
+    if(sec_buf == NULL) {
+        cfg_error("attempt to create a value outside of a section");
+        exit(1);
+    }
+
     if(get_state()) {
         char* tmp = _alloc(strlen(sec_buf)+strlen(name)+2);
         strcpy(tmp, sec_buf);
@@ -278,8 +283,8 @@ value_literal
     ;
 
 value_literal_list
-    : value_literal { appendLiteral(val, $1); }
-    | value_literal_list ':' value_literal { appendLiteral(val, $3); }
+    : value_literal { if(get_state()) appendLiteral(val, $1); }
+    | value_literal_list ':' value_literal { if(get_state()) appendLiteral(val, $3); }
     ;
 
 define_clause
@@ -363,7 +368,7 @@ else_intro
         }
     | ELSE '{' {
             if(get_state()) {
-                push_state(1);
+                push_state(get_state()? 0: 1);
             }
         }
     ;

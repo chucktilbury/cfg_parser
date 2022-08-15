@@ -25,13 +25,12 @@ void push_cfg_file(const char* fname)
     fs->name = _copy_str(fname);
     fs->line_no = 1;
 
-    fs->state = YY_CURRENT_BUFFER;
-
     cfg_in = fopen(fname, "r");
     if(cfg_in == NULL)
         cfg_fatal_error("cfg error: cannot open input file: '%s' %s.", fname, strerror(errno));
 
     yy_switch_to_buffer(yy_create_buffer(cfg_in, YY_BUF_SIZE));
+    fs->state = YY_CURRENT_BUFFER;
 
     fs->next = file_stack;
     file_stack = fs;
@@ -221,21 +220,21 @@ const char* get_text()
     }
 
 <<EOF>> {
-    /* Pop the data structure off of the stack */
-    if(file_stack != NULL) {
-        FileStack* tmp = file_stack;
-        file_stack = tmp->next;
-        _free(tmp->name);
-        _free(tmp);
-    }
+        /* Pop the data structure off of the stack */
+        if(file_stack != NULL) {
+            FileStack* tmp = file_stack;
+            file_stack = tmp->next;
+            _free(tmp->name);
+            _free(tmp);
+        }
 
-    /* If there is an active file, then switch to it. */
-    if(file_stack != NULL) {
-        yy_delete_buffer(YY_CURRENT_BUFFER);
-        yy_switch_to_buffer(file_stack->state);
-    }
-    else
-        yyterminate();
+        /* If there is an active file, then switch to it. */
+        if(file_stack != NULL) {
+            yy_delete_buffer(YY_CURRENT_BUFFER);
+            yy_switch_to_buffer(file_stack->state);
+        }
+        else
+            yyterminate();
     }
 
 

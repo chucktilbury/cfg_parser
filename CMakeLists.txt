@@ -17,28 +17,10 @@ add_library( ${PROJECT_NAME}
     ${BISON_PARSER_OUTPUTS}
     ${FLEX_SCANNER_OUTPUTS}
     values.c
-)
-
-add_executable( cfgtest
-    cfgtest.c
-)
-
-target_link_libraries( cfgtest
-    config
+    errors.c
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE
-    -Wall
-    -Wextra
-    $<$<CONFIG:DEBUG>:-g3>
-    $<$<CONFIG:DEBUG>:-Og>
-    $<$<CONFIG:DEBUG>:-DMEMORY_DEBUG>
-    $<$<CONFIG:DEBUG>:-DENA_TRACE>
-    $<$<CONFIG:RELEASE>:-Ofast>
-    $<$<CONFIG:PROFILE>:-pg -O0>
-)
-
-target_compile_options( cfgtest PRIVATE
     -Wall
     -Wextra
     $<$<CONFIG:DEBUG>:-g3>
@@ -53,3 +35,5 @@ set_property(DIRECTORY PROPERTY ADDITIONAL_MAKE_CLEAN_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/parser.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/parser.output"
 )
+
+add_subdirectory(tests)
