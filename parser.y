@@ -2,6 +2,12 @@
 
 #include "common.h"
 
+#if 0
+#define PRN(f, ...) do{printf(f, ## __VA_ARGS__ );}while(0)
+#else
+#define PRN(f, ...)
+#endif
+
 static Value* val;
 static char* sec_buf = NULL;
 static int sec_cap = 1;
@@ -15,8 +21,35 @@ typedef struct {
 
 StateStack* sstack = NULL;
 
-static void push_state(unsigned char val)
+#define CREATED 0x00
+#define INUSE   0x01
+#define FINISH  0x02
+#define stateToStr(s) ((s) == CREATED? "CREATED": (s) == INUSE? "INUSE": "FINISH")
+static int get_state()
 {
+    if(sstack->len > 0) {
+        int state = sstack->stack[sstack->len-1];
+        PRN("%d: state: %s\n", get_line_no(), stateToStr(state));
+        return state;
+    }
+    else
+        cfg_fatal_error("invalid parser state");
+
+    return 0;   // keep the compiler happy
+}
+
+static void set_state(unsigned char state)
+{
+    PRN("%d: set state: %s\n", get_line_no(), stateToStr(state));
+    if(sstack->len > 0)
+        sstack->stack[sstack->len-1] = state;
+    else
+        cfg_fatal_error("invalid parser state");
+}
+
+static void push_state()
+{
+    PRN("%d: push state\n", get_line_no());
     if(sstack != NULL) {
         if(sstack->len+1 > sstack->cap) {
             sstack->cap <<= 1;
@@ -29,26 +62,17 @@ static void push_state(unsigned char val)
         sstack->cap = 1 << 3;
         sstack->stack = _alloc_ds_array(unsigned char, sstack->cap);
     }
-    sstack->stack[sstack->len] = val;
+    sstack->stack[sstack->len] = CREATED;
     sstack->len++;
 }
 
 static void pop_state()
 {
+    PRN("%d: pop state\n", get_line_no());
     if(sstack->len > 0)
         sstack->len--;
     else
         cfg_fatal_error("parser state stack under run");
-}
-
-static int get_state()
-{
-    if(sstack->len > 0)
-        return sstack->stack[sstack->len-1];
-    else
-        cfg_fatal_error("invalid parser state");
-
-    return 0;   // keep the compiler happy
 }
 
 static unsigned char eval_expr(Literal* lit)
@@ -115,6 +139,9 @@ static const char* make_var_name(const char* name)
 
 static unsigned char comp_vals(Literal* left, Literal* right)
 {
+    PRN("%d: comp values: (%s)%s == (%s)%s\n",
+            get_line_no(), literalTypeToStr(left->type), left->str,
+            literalTypeToStr(right->type), right->str);
     switch(left->type) {
         case VAL_ERROR:
             switch(right->type) {
@@ -130,8 +157,16 @@ static unsigned char comp_vals(Literal* left, Literal* right)
         case VAL_NAME:
             switch(right->type) {
                 case VAL_ERROR: return 0;
-                case VAL_NAME:  return (strcmp(left->str, right->str) == 0);
-                case VAL_STR:   return (strcmp(left->str, formatStrLiteral(right->str)) == 0);
+                case VAL_NAME:
+                    /*printf("(%s)%s == (%s)%s\n",
+                            literalTypeToStr(left->type), left->data.str,
+                            literalTypeToStr(right->type), right->data.str);*/
+                    return (strcmp(left->str, right->str) == 0);
+                case VAL_STR:
+                    /*printf("(%s)%s == (%s)%s\n",
+                            literalTypeToStr(left->type), left->data.str,
+                            literalTypeToStr(right->type), formatStrLiteral(right->data.str));*/
+                    return (strcmp(left->data.str, formatStrLiteral(right->data.str)) == 0);
                 case VAL_NUM:   return 0;
                 case VAL_FNUM:  return 0;
                 case VAL_BOOL:  return 0;
@@ -141,8 +176,16 @@ static unsigned char comp_vals(Literal* left, Literal* right)
         case VAL_STR:
             switch(right->type) {
                 case VAL_ERROR: return 0;
-                case VAL_NAME:  return (strcmp(formatStrLiteral(left->str), right->str) == 0);
-                case VAL_STR:   return (strcmp(formatStrLiteral(left->str), formatStrLiteral(right->str)) == 0);
+                case VAL_NAME:
+                    /*printf("(%s)%s == (%s)%s\n",
+                            literalTypeToStr(left->type), left->data.str,
+                            literalTypeToStr(right->type), right->data.str);*/
+                    return (strcmp(formatStrLiteral(left->data.str), right->data.str) == 0);
+                case VAL_STR:
+                    /*printf("(%s)%s == (%s)%s\n",
+                            literalTypeToStr(left->type), formatStrLiteral(left->data.str),
+                            literalTypeToStr(right->type), formatStrLiteral(right->data.str));*/
+                    return (strcmp(formatStrLiteral(left->data.str), formatStrLiteral(right->data.str)) == 0);
                 case VAL_NUM:   return 0;
                 case VAL_FNUM:  return 0;
                 case VAL_BOOL:  return 0;
@@ -190,6 +233,7 @@ static unsigned char comp_vals(Literal* left, Literal* right)
 
 static Literal* comp_equ(Literal* left, Literal* right)
 {
+    //printf("%s == %s\n", literalValToStr(left), literalValToStr(right));
     Literal* result = _alloc_ds(Literal);
 
     result->type = VAL_BOOL;
@@ -247,8 +291,11 @@ static Literal* negate_expr(Literal* val)
 
 module
     : {
-        push_state(1);
-    } module_list
+        push_state();
+        set_state(INUSE);
+    } module_list {
+        pop_state();
+    }
     ;
 
 module_list
@@ -265,11 +312,11 @@ module_item
 
 include_clause
     : INCLUDE QSTR {
-            if(get_state())
+            if(get_state() == INUSE)
                 push_cfg_file($2->str); // formatting not supported
         }
     | INCLUDE NAME {
-            if(get_state())
+            if(get_state() == INUSE)
                 push_cfg_file($2->str); // formatting not supported
         }
     ;
@@ -283,18 +330,33 @@ value_literal
     ;
 
 value_literal_list
-    : value_literal { if(get_state()) appendLiteral(val, $1); }
-    | value_literal_list ':' value_literal { if(get_state()) appendLiteral(val, $3); }
+    : value_literal {
+            if(get_state() == INUSE)
+                appendLiteral(val, $1);
+        }
+    | value_literal_list ':' value_literal {
+            if(get_state() == INUSE)
+                appendLiteral(val, $3);
+        }
     ;
 
 define_clause
     : DEFINE NAME value_literal {
-            appendLiteral(createVal($2->str), $3);
+            if(get_state() == INUSE) {
+                //printf("define %s %s\n", $2->str, $3->str);
+                appendLiteral(createVal($2->str), $3);
+            }
         }
     ;
 
 section_clause
-    : NAME '{' { push_section_name($1->str); } section_body '}' { pop_section_name(); }
+    : NAME '{' {
+            if(get_state() == INUSE)
+                push_section_name($1->str);
+        } section_body '}' {
+            if(get_state() == INUSE)
+                pop_section_name();
+        }
     ;
 
 bool_value
@@ -309,7 +371,7 @@ section_body
 
 section_body_item
     : NAME '=' {
-            if(get_state())
+            if(get_state() == INUSE)
                 val = createVal(make_var_name($1->str));
         } value_literal_list
     | section_clause
@@ -323,62 +385,53 @@ if_body_list
 
 if_intro
     : IFDEF NAME '{' {
-            if(get_state()) {
-                Value* val = findValue($2->str);
-                if(val != NULL)
-                    push_state(1);
-                else
-                    push_state(0);
-            }
+            push_state();
+            if(findValue($2->str) != NULL)
+                set_state(INUSE);
         }
     | IFNDEF NAME '{' {
-            if(get_state()) {
-                Value* val = findValue($2->str);
-                if(val != NULL)
-                    push_state(0);
-                else
-                    push_state(1);
-            }
+            push_state();
+            if(findValue($2->str) == NULL)
+                set_state(INUSE);
         }
     | IF expression '{' {
-            if(get_state()) {
-                push_state(eval_expr($2));
-            }
+            push_state();
+            if(eval_expr($2))
+                set_state(INUSE);
         }
     ;
 
 if_clause
     : if_intro if_body_list '}' {
-            if(get_state()) {
-                pop_state();
-            }
+            pop_state();
         }
     | if_intro if_body_list '}' {
-            if(get_state()) {
-                pop_state();
-            }
-        } else_clause_list
+            if(get_state() == INUSE)
+                set_state(FINISH);
+        } else_clause_list {
+            pop_state();
+        }
     ;
 
 else_intro
     : ELSE expression '{' {
-            if(get_state()) {
-                push_state(eval_expr($2));
+            if(get_state() != FINISH) {
+                if(eval_expr($2))
+                    set_state(INUSE);
             }
         }
     | ELSE '{' {
-            if(get_state()) {
-                push_state(get_state()? 0: 1);
+            if(get_state() != FINISH) {
+                set_state(INUSE);
             }
         }
     ;
 
 else_clause
     : else_intro if_body_list '}' {
-            if(get_state()) {
-                pop_state();
-            }
-        }
+        if(get_state() == INUSE)
+            set_state(FINISH);
+    }
     ;
 
 else_clause_list

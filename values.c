@@ -114,6 +114,7 @@ static Value* find_value(Value* tree, const char* key)
 
 static void append_val_entry(Value* val, Literal* ve)
 {
+    //printf("val:%s, lit:%s\n", val->name, ve->str);
     LiteralList* list = val->list;
     if(list->last != NULL) {
         ve->prev = list->last;
@@ -127,6 +128,7 @@ static void append_val_entry(Value* val, Literal* ve)
 
 static void prepend_val_entry(Value* val, Literal* ve)
 {
+    //printf("val:%s, lit:%s\n", val->name, ve->str);
     LiteralList* list = val->list;
     if(list->first != NULL) {
         ve->next = list->first;
@@ -221,8 +223,11 @@ static const char* do_str_subs(const char* str)
                         break;
                     case ')':
                         // index is required. syntax error
-                        fprintf(stderr, "cfg syntax error: %d: index is required near '%s'\n", get_line_no(), str);
-                        exit(1);
+                        //fprintf(stderr, "cfg syntax error: %d: index is required near '%s'\n", get_line_no(), str);
+                        //exit(1);
+                        idx++;
+                        var_idx = 0;
+                        state = 5;
                         break;
                     case ',':
                         idx++;
@@ -268,11 +273,7 @@ static const char* do_str_subs(const char* str)
                             case VAL_NUM: add_str_fmt(s, "%ld", ve->data.num); break;
                             case VAL_FNUM: add_str_fmt(s, "%f", ve->data.fnum); break;
                             case VAL_BOOL: add_str_fmt(s, "%s", ve->data.bval? "TRUE": "FALSE"); break;
-                            default:
-                                // internal error, should never happen
-                                fprintf(stderr, "cfg internal error: unknown value type: %d", ve->type);
-                                exit(1);
-                                break;
+                            default: cfg_fatal_error("unknown value type: %d", ve->type);
                         }
                     }
                     state = 0;
@@ -326,7 +327,7 @@ Literal* createLiteral(ValType type, const char* str)
         case VAL_NUM:   lit->data.num = strtol(str, NULL, 10); break;
         case VAL_FNUM:  lit->data.fnum = strtod(str, NULL); break;
         case VAL_BOOL:  lit->data.bval = (strcmp(str, "false"))? 1: 0; break;
-        default:        cfg_fatal_error("unknown value type: %d");
+        default:        cfg_fatal_error("unknown value type: %d", type);
     }
 
     return lit;
