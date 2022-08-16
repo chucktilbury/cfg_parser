@@ -180,6 +180,7 @@ static const char* do_str_subs(const char* str)
     int finished = 0;
     str_t* s = create_str(NULL);
     str_t* tmp = create_str(NULL);
+    int subs = 0;
 
     while(!finished) {
         switch(state) {
@@ -222,9 +223,6 @@ static const char* do_str_subs(const char* str)
                         finished++;
                         break;
                     case ')':
-                        // index is required. syntax error
-                        //fprintf(stderr, "cfg syntax error: %d: index is required near '%s'\n", get_line_no(), str);
-                        //exit(1);
                         idx++;
                         var_idx = 0;
                         state = 5;
@@ -275,6 +273,7 @@ static const char* do_str_subs(const char* str)
                             case VAL_BOOL: add_str_fmt(s, "%s", ve->data.bval? "TRUE": "FALSE"); break;
                             default: cfg_fatal_error("unknown value type: %d", ve->type);
                         }
+                        subs++;
                     }
                     state = 0;
                 }
@@ -282,7 +281,11 @@ static const char* do_str_subs(const char* str)
         }
     }
 
-    return s->buf;
+    // FIXME: memory leak if GC is not in use.
+    if(subs == 0)
+        return s->buf;
+    else
+        return do_str_subs(s->buf);
 }
 
 Value* createVal(const char* name)
