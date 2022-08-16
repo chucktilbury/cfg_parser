@@ -15,12 +15,12 @@
 #include "scanner.h"
 #include "errors.h"
 
-void cfg_fatal_error(const char* fmt, ...);
-void cfg_warning(const char* fmt, ...);
+void cfgFatalError(const char* fmt, ...);
+void cfgWarning(const char* fmt, ...);
 #define cfg_syntax cfg_error
 void cfg_error(const char *s);
-int cfg_get_errors();
-int cfg_get_warnings();
+int getCfgErrors();
+int getCfgWarnings();
 
 #endif
 

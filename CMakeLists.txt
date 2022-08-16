@@ -18,6 +18,8 @@ add_library( ${PROJECT_NAME}
     ${FLEX_SCANNER_OUTPUTS}
     values.c
     errors.c
+    config.c
+    cmdline.c
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE

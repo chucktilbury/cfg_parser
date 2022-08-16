@@ -5,17 +5,17 @@
 static int errors = 0;
 static int warnings = 0;
 
-int cfg_get_errors()
+int getCfgErrors()
 {
     return errors;
 }
 
-int cfg_get_warnings()
+int getCfgWarnings()
 {
     return warnings;
 }
 
-void cfg_fatal_error(const char* fmt, ...)
+void cfgFatalError(const char* fmt, ...)
 {
     va_list args;
 
@@ -27,7 +27,7 @@ void cfg_fatal_error(const char* fmt, ...)
     exit(1);
 }
 
-void cfg_warning(const char* fmt, ...)
+void cfgWarning(const char* fmt, ...)
 {
     va_list args;
 

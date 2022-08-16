@@ -33,7 +33,7 @@ static int get_state()
         return state;
     }
     else
-        cfg_fatal_error("invalid parser state");
+        cfgFatalError("invalid parser state");
 
     return 0;   // keep the compiler happy
 }
@@ -44,7 +44,7 @@ static void set_state(unsigned char state)
     if(sstack->len > 0)
         sstack->stack[sstack->len-1] = state;
     else
-        cfg_fatal_error("invalid parser state");
+        cfgFatalError("invalid parser state");
 }
 
 static void push_state()
@@ -72,7 +72,7 @@ static void pop_state()
     if(sstack->len > 0)
         sstack->len--;
     else
-        cfg_fatal_error("parser state stack under run");
+        cfgFatalError("parser state stack under run");
 }
 
 static unsigned char eval_expr(Literal* lit)
@@ -84,7 +84,7 @@ static unsigned char eval_expr(Literal* lit)
         case VAL_NUM:   return lit->data.num == 0? 0: 1;
         case VAL_FNUM:  return lit->data.fnum != 0.0? 1: 0;
         case VAL_BOOL:  return lit->data.bval;
-        default: cfg_fatal_error("invalid literal type in eval_expr()");
+        default: cfgFatalError("invalid literal type in eval_expr()");
     }
 
     return 0; // remove compiler warning.
@@ -151,7 +151,7 @@ static unsigned char comp_vals(Literal* left, Literal* right)
                 case VAL_NUM:   return 0;
                 case VAL_FNUM:  return 0;
                 case VAL_BOOL:  return 0;
-                default: cfg_fatal_error("invalid right literal type in comp_nequ()");
+                default: cfgFatalError("invalid right literal type in comp_nequ()");
             }
             break;
         case VAL_NAME:
@@ -170,7 +170,7 @@ static unsigned char comp_vals(Literal* left, Literal* right)
                 case VAL_NUM:   return 0;
                 case VAL_FNUM:  return 0;
                 case VAL_BOOL:  return 0;
-                default: cfg_fatal_error("invalid right literal type in comp_nequ()");
+                default: cfgFatalError("invalid right literal type in comp_nequ()");
             }
             break;
         case VAL_STR:
@@ -189,7 +189,7 @@ static unsigned char comp_vals(Literal* left, Literal* right)
                 case VAL_NUM:   return 0;
                 case VAL_FNUM:  return 0;
                 case VAL_BOOL:  return 0;
-                default: cfg_fatal_error("invalid right literal type in comp_nequ()");
+                default: cfgFatalError("invalid right literal type in comp_nequ()");
             }
             break;
         case VAL_NUM:
@@ -200,7 +200,7 @@ static unsigned char comp_vals(Literal* left, Literal* right)
                 case VAL_NUM:   return (left->data.num == right->data.num);
                 case VAL_FNUM:  return (left->data.num == right->data.fnum);
                 case VAL_BOOL:  return (left->data.num == right->data.bval);
-                default: cfg_fatal_error("invalid right literal type in comp_nequ()");
+                default: cfgFatalError("invalid right literal type in comp_nequ()");
             }
             break;
         case VAL_FNUM:
@@ -211,7 +211,7 @@ static unsigned char comp_vals(Literal* left, Literal* right)
                 case VAL_NUM:   return (left->data.fnum != right->data.num);
                 case VAL_FNUM:  return (left->data.fnum != right->data.fnum);
                 case VAL_BOOL:  return (left->data.fnum != right->data.bval);
-                default: cfg_fatal_error("invalid right literal type in comp_nequ()");
+                default: cfgFatalError("invalid right literal type in comp_nequ()");
             }
             break;
         case VAL_BOOL:
@@ -222,10 +222,10 @@ static unsigned char comp_vals(Literal* left, Literal* right)
                 case VAL_NUM:   return (left->data.bval != right->data.num);
                 case VAL_FNUM:  return (left->data.bval != right->data.fnum);
                 case VAL_BOOL:  return (left->data.bval != right->data.bval);
-                default: cfg_fatal_error("invalid right literal type in comp_nequ()");
+                default: cfgFatalError("invalid right literal type in comp_nequ()");
             }
             break;
-        default: cfg_fatal_error("invalid left literal type in comp_nequ()");
+        default: cfgFatalError("invalid left literal type in comp_nequ()");
     }
 
     return 0;   // can never happen, but the compiler doesn't know it.
@@ -264,7 +264,7 @@ static Literal* negate_expr(Literal* val)
         case VAL_NUM: result->data.bval = (val->data.num == 0); break;
         case VAL_FNUM: result->data.bval = (val->data.fnum == 0.0); break;
         case VAL_BOOL: result->data.bval = (val->data.bval == 0)? 1: 0; break;
-        default: cfg_fatal_error("invalid literal type in negate_expr()");
+        default: cfgFatalError("invalid literal type in negate_expr()");
     }
 
     return result;

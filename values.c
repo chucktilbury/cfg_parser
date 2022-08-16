@@ -271,7 +271,7 @@ static const char* do_str_subs(const char* str)
                             case VAL_NUM: add_str_fmt(s, "%ld", ve->data.num); break;
                             case VAL_FNUM: add_str_fmt(s, "%f", ve->data.fnum); break;
                             case VAL_BOOL: add_str_fmt(s, "%s", ve->data.bval? "TRUE": "FALSE"); break;
-                            default: cfg_fatal_error("unknown value type: %d", ve->type);
+                            default: cfgFatalError("unknown value type: %d", ve->type);
                         }
                         subs++;
                     }
@@ -330,7 +330,7 @@ Literal* createLiteral(ValType type, const char* str)
         case VAL_NUM:   lit->data.num = strtol(str, NULL, 10); break;
         case VAL_FNUM:  lit->data.fnum = strtod(str, NULL); break;
         case VAL_BOOL:  lit->data.bval = (strcmp(str, "false"))? 1: 0; break;
-        default:        cfg_fatal_error("unknown value type: %d", type);
+        default:        cfgFatalError("unknown value type: %d", type);
     }
 
     return lit;
@@ -412,7 +412,7 @@ long int getLiteralAsNum(Value* val, int index)
     if(lit != NULL && lit->type == VAL_NUM)
         return lit->data.num;
     else {
-        cfg_warning("attempt to get a %s as a NUM", literalTypeToStr(lit->type));
+        cfgWarning("attempt to get a %s as a NUM", literalTypeToStr(lit->type));
         return strtol(lit->str, NULL, 10);
     }
 }
@@ -423,7 +423,7 @@ double getLiteralAsFnum(Value* val, int index)
     if(lit != NULL && lit->type == VAL_FNUM)
         return lit->data.fnum;
     else {
-        cfg_warning("attempt to get a %s as a FNUM", literalTypeToStr(lit->type));
+        cfgWarning("attempt to get a %s as a FNUM", literalTypeToStr(lit->type));
         return strtod(lit->str, NULL);
     }
 }
@@ -434,7 +434,7 @@ unsigned char getLiteralAsBool(Value* val, int index)
     if(lit != NULL && lit->type == VAL_BOOL)
         return lit->data.bval;
     else {
-        cfg_warning("attempt to get a %s as a BOOL", literalTypeToStr(lit->type));
+        cfgWarning("attempt to get a %s as a BOOL", literalTypeToStr(lit->type));
         return 0;
     }
 }
@@ -478,7 +478,7 @@ void printLiteralVal(Literal* lit)
     if(lit != NULL)
         printf("(%s)%s", literalTypeToStr(lit->type), literalValToStr(lit));
     else
-        cfg_fatal_error("attempt to print a NULL literal value");
+        cfgFatalError("attempt to print a NULL literal value");
 }
 
 const char* literalTypeToStr(ValType type)
@@ -524,7 +524,7 @@ const char* literalValToStr(Literal* lit)
             }
             break;
         default:
-            cfg_fatal_error("unknown literal type: %d", lit->type);
+            cfgFatalError("unknown literal type: %d", lit->type);
             break;
     }
 

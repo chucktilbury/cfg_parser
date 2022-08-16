@@ -1,5 +1,13 @@
-#include "common.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#include <ctype.h>
+#include <assert.h>
+#include <errno.h>
 #include <stdarg.h>
+
+#include "config.h"
 
 // defined in values.c
 void dumpValues();
@@ -12,17 +20,16 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    push_cfg_file(argv[1]);
-    int retv = cfg_parse();
+    int retv = readConfig(argv[1]);
     Value* val = findValue("description");
     if(val != NULL) {
        Literal* lit = getLiteral(val, 0);
        printLiteralVal(lit);
     }
-    if(!cfg_get_errors())
+    if(!getCfgErrors())
         dumpValues();
     else
-        printf("test completed with %d errors\n", cfg_get_errors());
+        printf("test completed with %d errors\n", getCfgErrors());
 
 
 

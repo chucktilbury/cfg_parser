@@ -27,7 +27,7 @@ void push_cfg_file(const char* fname)
 
     cfg_in = fopen(fname, "r");
     if(cfg_in == NULL)
-        cfg_fatal_error("cfg error: cannot open input file: '%s' %s.", fname, strerror(errno));
+        cfgFatalError("cfg error: cannot open input file: '%s' %s.", fname, strerror(errno));
 
     yy_switch_to_buffer(yy_create_buffer(cfg_in, YY_BUF_SIZE));
     fs->state = YY_CURRENT_BUFFER;
@@ -216,7 +216,7 @@ const char* get_text()
 
     /* This pretty much should never happen */
 .   {
-        cfg_warning("unrecognized character ignored: '%c' (0x%02X)", cfg_text[0], cfg_text[0]);
+        cfgWarning("unrecognized character ignored: '%c' (0x%02X)", cfg_text[0], cfg_text[0]);
     }
 
 <<EOF>> {
